@@ -2,15 +2,6 @@
 
 ;Global configuation variable
 (def ^{:dynamic true} *config* nil)
-;(def global-config (atom {:state ""
-;                          :string ""
-;                          :registers (atom {})
-;                          :hold-register '()
-;                          :level ""
-;                          :pop-config ""
-;                          :push-acts ""
-;                          :sendr-acts (atom {})
-;                          :liftr-acts (atom {} )}))
 
 ;Global parse trees
 ;(def parse-trees (atom nil))
@@ -23,6 +14,10 @@
 ;Default trace level
 (def trace-level (atom 0))
 ;(def ^{:dynamic true} *trace-level* nil)
+
+(def punctuation ["." "!" "?"])
+
+(def lexicon (atom nil))
 
 ;;Hashtable for the ATN arcs
 ;;How it should look after initializing
@@ -48,12 +43,14 @@
 ;(def atn-arcs-ht (atom nil))
 (def ^{:dynamic true} *atn-arcs-ht* nil)
 
+(def ^{:dynamic true} *lexicon* nil)
+
 (defrecord config
   [state                                                    ;state of the ATN
    string                                                   ;current state of the input string
    registers                                                ;current register values (assoc list)
    hold-register                                            ;list of hold pairs (category form) pairs
-   level                                                    ;current level of grammer
+   level                                                    ;current level of grammar
    pop-config                                               ;back link to config PUSHed, CALLed, or RCALLed
    push-acts                                                ;post acts used when pop-ing from a PUSH, CALL, or RCALL
    sendr-acts                                               ;assoc list of (register value) to be set on entry to this config
@@ -149,16 +146,16 @@
   `(rest (rest (rest (rest (~arc))))))
 
 (defmacro set-state
-  "Set the registers to a given value, either in the provided configuration
+  "Set the state to a given value, either in the provided configuration
    or, if no configuration was provided, the global configuration."
   [value & {:keys [configuration] :or {configuration nil}}]
   (if configuration
     `(reset! (:state ~configuration) ~value)
     `(reset! (:state *config*) ~value))) ;; Leave @*config* unevaluated!
 
-;; Note: Assumes *config* has a non-nil value.
+;Note: Assumes *config* has a non-nil value.
 (defmacro get-state
-  "Get the registers from a provided configuration, or, if none is provided, then
+  "Get the state from a provided configuration, or, if none is provided, then
    the global configuration."
   [& {:keys [configuration] :or {configuration nil}}]
   (if configuration
@@ -166,16 +163,16 @@
     `@(:state *config*))) ;; Leave *config* unevaluated!
 
 (defmacro set-string
-  "Set the registers to a given value, either in the provided configuration
+  "Set the string to a given value, either in the provided configuration
    or, if no configuration was provided, the global configuration."
   [value & {:keys [configuration] :or {configuration nil}}]
   (if configuration
     `(reset! (:string ~configuration) ~value)
     `(reset! (:string *config*) ~value))) ;; Leave @*config* unevaluated!
 
-;; Note: Assumes *config* has a non-nil value.
+;Note: Assumes *config* has a non-nil value.
 (defmacro get-string
-  "Get the registers from a provided configuration, or, if none is provided, then
+  "Get the string from a provided configuration, or, if none is provided, then
    the global configuration."
   [& {:keys [configuration] :or {configuration nil}}]
   (if configuration
@@ -190,7 +187,7 @@
     `(reset! (:registers ~configuration) ~value)
     `(reset! (:registers *config*) ~value)))
 
-;; Note: Assumes *config* has a non-nil value.
+;Note: Assumes *config* has a non-nil value.
 (defmacro get-registers
   "Get the registers from a provided configuration, or, if none is provided, then
    the global configuration."
@@ -199,68 +196,17 @@
     `@(:registers ~configuration)
     `@(:registers *config*))) ;; Leave *config* unevaluated!
 
-(defmacro set-hold-register
-  "Set the registers to a given value, either in the provided configuration
-   or, if no configuration was provided, the global configuration."
-  [value & {:keys [configuration] :or {configuration nil}}]
-  (if configuration
-    `(reset! (:hold-register ~configuration) ~value)
-    `(reset! (:hold-register *config*) ~value))) ;; Leave @*config* unevaluated!
-
-;; Note: Assumes *config* has a non-nil value.
-(defmacro get-hold-register
-  "Get the registers from a provided configuration, or, if none is provided, then
-   the global configuration."
-  [& {:keys [configuration] :or {configuration nil}}]
-  (if configuration
-    `@(:hold-register ~configuration)
-    `@(:hold-register *config*))) ;; Leave *config* unevaluated!
-
-(defmacro set-level
-  "Set the registers to a given value, either in the provided configuration
-   or, if no configuration was provided, the global configuration."
-  [value & {:keys [configuration] :or {configuration nil}}]
-  (if configuration
-    `(reset! (:level ~configuration) ~value)
-    `(reset! (:level *config*) ~value))) ;; Leave @*config* unevaluated!
-
-;; Note: Assumes *config* has a non-nil value.
-(defmacro get-level
-  "Get the registers from a provided configuration, or, if none is provided, then
-   the global configuration."
-  [& {:keys [configuration] :or {configuration nil}}]
-  (if configuration
-    `@(:level ~configuration)
-    `@(:level *config*))) ;; Leave *config* unevaluated!
-
-(defmacro set-pop-config
-  "Set the registers to a given value, either in the provided configuration
-   or, if no configuration was provided, the global configuration."
-  [value & {:keys [configuration] :or {configuration nil}}]
-  (if configuration
-    `(reset! (:pop-config ~configuration) ~value)
-    `(reset! (:pop-config *config*) ~value))) ;; Leave @*config* unevaluated!
-
-;; Note: Assumes *config* has a non-nil value.
-(defmacro get-pop-config
-  "Get the registers from a provided configuration, or, if none is provided, then
-   the global configuration."
-  [& {:keys [configuration] :or {configuration nil}}]
-  (if configuration
-    `@(:pop-config ~configuration)
-    `@(:pop-config *config*))) ;; Leave *config* unevaluated!
-
 (defmacro set-push-acts
-  "Set the registers to a given value, either in the provided configuration
+  "Set the push-acts to a given value, either in the provided configuration
    or, if no configuration was provided, the global configuration."
   [value & {:keys [configuration] :or {configuration nil}}]
   (if configuration
     `(reset! (:push-acts ~configuration) ~value)
     `(reset! (:push-acts *config*) ~value))) ;; Leave @*config* unevaluated!
 
-;; Note: Assumes *config* has a non-nil value.
+;Note: Assumes *config* has a non-nil value.
 (defmacro get-push-acts
-  "Get the registers from a provided configuration, or, if none is provided, then
+  "Get the push-acts from a provided configuration, or, if none is provided, then
    the global configuration."
   [& {:keys [configuration] :or {configuration nil}}]
   (if configuration
@@ -268,16 +214,16 @@
     `@(:push-acts *config*))) ;; Leave *config* unevaluated!
 
 (defmacro set-sendr-acts
-  "Set the registers to a given value, either in the provided configuration
+  "Set the sendr-acts to a given value, either in the provided configuration
    or, if no configuration was provided, the global configuration."
   [value & {:keys [configuration] :or {configuration nil}}]
   (if configuration
     `(reset! (:sendr-acts ~configuration) ~value)
     `(reset! (:sendr-acts *config*) ~value))) ;; Leave @*config* unevaluated!
 
-;; Note: Assumes *config* has a non-nil value.
+;Note: Assumes *config* has a non-nil value.
 (defmacro get-sendr-acts
-  "Get the registers from a provided configuration, or, if none is provided, then
+  "Get the sendr-acts from a provided configuration, or, if none is provided, then
    the global configuration."
   [& {:keys [configuration] :or {configuration nil}}]
   (if configuration
@@ -285,21 +231,73 @@
     `@(:sendr-acts *config*))) ;; Leave *config* unevaluated!
 
 (defmacro set-liftr-acts
-  "Set the registers to a given value, either in the provided configuration
+  "Set the liftr-acts to a given value, either in the provided configuration
    or, if no configuration was provided, the global configuration."
   [value & {:keys [configuration] :or {configuration nil}}]
   (if configuration
     `(reset! (:liftr-acts ~configuration) ~value)
     `(reset! (:liftr-acts *config*) ~value))) ;; Leave @*config* unevaluated!
 
-;; Note: Assumes *config* has a non-nil value.
+;Note: Assumes *config* has a non-nil value.
 (defmacro get-liftr-acts
-  "Get the registers from a provided configuration, or, if none is provided, then
+  "Get the liftr-acts from a provided configuration, or, if none is provided, then
    the global configuration."
   [& {:keys [configuration] :or {configuration nil}}]
   (if configuration
     `@(:liftr-acts ~configuration)
     `@(:liftr-acts *config*))) ;; Leave *config* unevaluated!
+
+(defmacro set-hold-register
+  "Set the hold-register to a given value, either in the provided configuration
+   or, if no configuration was provided, the global configuration."
+  [value & {:keys [configuration] :or {configuration nil}}]
+  (if configuration
+    `(reset! (:hold-register ~configuration) ~value)
+    `(reset! (:hold-register *config*) ~value))) ;; Leave @*config* unevaluated!
+
+;Note: Assumes *config* has a non-nil value.
+(defmacro get-hold-register
+  "Get the hold-register from a provided configuration, or, if none is provided, then
+   the global configuration."
+  [& {:keys [configuration] :or {configuration nil}}]
+  (if configuration
+    `@(:hold-register ~configuration)
+    `@(:hold-register *config*))) ;; Leave *config* unevaluated!
+
+(defmacro set-level
+  "Set the level to a given value, either in the provided configuration
+   or, if no configuration was provided, the global configuration."
+  [value & {:keys [configuration] :or {configuration nil}}]
+  (if configuration
+    `(reset! (:level ~configuration) ~value)
+    `(reset! (:level *config*) ~value))) ;; Leave @*config* unevaluated!
+
+;Note: Assumes *config* has a non-nil value.
+(defmacro get-level
+  "Get the level from a provided configuration, or, if none is provided, then
+   the global configuration."
+  [& {:keys [configuration] :or {configuration nil}}]
+  (if configuration
+    `@(:level ~configuration)
+    `@(:level *config*))) ;; Leave *config* unevaluated!
+
+(defmacro set-pop-config
+  "Set the pop-config to a given value, either in the provided configuration
+   or, if no configuration was provided, the global configuration."
+  [value & {:keys [configuration] :or {configuration nil}}]
+  (if configuration
+    `(reset! (:pop-config ~configuration) ~value)
+    `(reset! (:pop-config *config*) ~value))) ;; Leave @*config* unevaluated!
+
+;Note: Assumes *config* has a non-nil value.
+(defmacro get-pop-config
+  "Get the pop-config from a provided configuration, or, if none is provided, then
+   the global configuration."
+  [& {:keys [configuration] :or {configuration nil}}]
+  (if configuration
+    `@(:pop-config ~configuration)
+    `@(:pop-config *config*))) ;; Leave *config* unevaluated!
+
 
 (defmacro putarc [state arc]
   `(swap! atn-arcs-ht assoc (keyword ~state) (cons ~arc ((keyword ~state) atn-arcs-ht))))
@@ -326,14 +324,14 @@
   (get (get-registers) register))
 
 ;;Evaluates an ATN form
+;Given an S-expression, evaluates it by:
+; If it's a string or number, just returning those values;
+;	If it names a register, returning the register value;
+;	If it is *, returning the register value of *;
+;	If it is a list, evaluating it as a Clojure form;
+;	If it is bound to a variable, returning its value;
+;	Otherwise, nil.
 (defn evaluate-form
-  "Given an S-expression, evaluates it by:
-    If it's a string or number, just returning those values;
-	If it names a register, returning the register value;
-	If it is *, returning the register value of *;
-	If it is a list, evaluating it as a Clojure form;
-	If it is bound to a variable, returning its value;
-	Otherwise, nil."
   [s-exp]
   (cond
     (number? s-exp) s-exp
@@ -346,123 +344,154 @@
 
 (defmacro setr [register & forms]
   `(set-registers (assoc (get-registers)                    ;;map
-                    '~register                              ;;key
+                    (keyword '~register)                          ;;key
                     (setup-forms (map evaluate-form '~forms))))) ;;val(s)
 
 (defmacro setrq [register & forms]
   `(set-registers (assoc (get-registers)                    ;;map
-                    '~register                              ;;key
-                    (setup-forms (map '~forms)))))          ;;val(s)
+                    (keyword '~register)                               ;;key
+                    (quote ~forms))))           ;;val(s)
 
 (defmacro addr [register & forms]
-  `(let [contents (get-in global-config [:registers (keyword ~register)])
-         forms (evaluate-forms ~forms)
-         newcontents (conj forms contents)]
-     (swap! global-config update-in [:registers] assoc (keyword ~register) newcontents)
+  `(if ((keyword '~register)(get-registers))
+     (let [contents# ((keyword '~register)(get-registers))
+           forms# (map evaluate-form '~forms)
+           newcontents# (conj forms# contents#)]
+       (println contents#)
+       (println forms#)
+       (println newcontents#)
+       (swap! (get-registers) assoc (keyword '~register) newcontents#))
+     ;(setr ~register ~forms)
      )
   )
+
+(defn test-addr []
+  (binding [*config* (make-configuration) ;; current configuration we're modifying.
+            *parse-trees* nil]
+    (println "Getting register:" (get-registers) "(Expected empty)") ;; Should be empty.
+    (println "Setting register to {a b} ...")
+    (set-registers '{:v "run"})
+    (println "Getting register:" (get-registers))
+    (println "Trying setr called testreg to (+ 1 2 3) which should evaluate to 6.")
+    (addr v (+ 1 2))
+    (println "Getting register:" (get-registers))))
 
 (defmacro addl [register & forms]
-  `(let [contents (get-in global-config [:registers (keyword ~register)])
-         forms (evaluate-forms ~forms)
-         newcontents (conj forms contents)]
-     (swap! global-config update-in [:registers] assoc (keyword ~register) newcontents)
+  `(if ((keyword '~register)(get-registers))
+     (let [contents# ((keyword '~register)(get-registers))
+           forms# (evaluate-form ~forms)
+           newcontents# (cons forms# contents#)]
+       (println contents#)
+       (println forms#)
+       (println newcontents#)
+       (swap! (get-registers) assoc (keyword '~register) newcontents#))
+     ;(setr ~register ~forms)
      )
   )
 
+(defn test-addl []
+  (binding [*config* (make-configuration) ;; current configuration we're modifying.
+            *parse-trees* nil]
+    (println "Getting register:" (get-registers) "(Expected empty)") ;; Should be empty.
+    (println "Setting register to {a b} ...")
+    (set-registers '{a b})
+    (println "Getting register:" (get-registers))
+    (println "Trying setr called testreg to (+ 1 2 3) which should evaluate to 6.")
+    (addl a 6)
+    (println "Getting register:" (get-registers))))
+
 (defmacro sendr [register & forms]
-  `(if ~forms
+  (if forms
      `(set-sendr-acts (assoc (get-sendr-acts)               ;map
-                       '~register                           ;key
-                       (setup-forms (map evaluate-form '~forms)))) ;val(s)
+                        '~register                           ;key
+                        (setup-forms (map evaluate-form '~forms)))) ;val(s)
      `(set-sendr-acts (assoc (get-sendr-acts)               ;map
                         '~register                          ;key
                         (internal-getr ~register)))))       ;val(s)
+
+(defn test-sendr []
+  (binding [*config* (make-configuration) ;; current configuration we're modifying.
+            *parse-trees* nil]
+    (println "Getting sendr actions:" (get-sendr-acts) "(Expected empty)") ;; Should be empty.
+    (println "Setting sendr actions to {a b} ...")
+    (set-registers '{a b})
+    (println "Getting sendr actions:" (get-sendr-acts))
+    (println "Trying sendr ")
+    (sendr a (+ 1 2))
+    (println "Getting sendr actions:" (get-sendr-acts))))
 
 (defmacro sendrq [register & forms]
   `(set-sendr-acts (assoc (get-sendr-acts)                  ;map
-                    '~register                              ;key
-                    (setup-forms (map '~forms)))))          ;val(s)
+                    '~register                            ;key
+                    (quote ~forms))))          ;val(s)
 
 (defmacro liftr [register & forms]
-  `(if ~forms
-     `(set-liftr-acts (assoc (get-liftr-acts)               ;map
-                        '~register                          ;key
-                        (setup-forms (map evaluate-form '~forms)))) ;val(s)
-     `(set-liftr-acts (assoc (get-liftr-acts)               ;map
-                        '~register                          ;key
-                        (internal-getr ~register)))))       ;val(s)
+  `(set-liftr-acts (assoc (get-liftr-acts)               ;map
+                      '~register                          ;key
+                      (setup-forms (map evaluate-form '~forms))))) ;vals
 
-(defmacro hold [constit-type form]
-  `(set-hold-register (cons (list ~constit-type
+(defmacro hold [cat form]
+  `(set-hold-register (cons (list ~cat
                                   (list (setup-forms (evaluate-form ~form)))
                                   (get-level))
                             (get-hold-register))))
 
-;(defn any-holds? []
-;  (binding global-config)
-;  (let [holdr (get-hold-register)
-;        level (get-level)]
-;    (if (nil? holdr)
-;      true
-;      ((fn [x] (equal (first (rest (rest x))) level)) holdr))))
+(defn any-holds? []
+  (binding [*config* *config*]
+    (let [holdr (get-hold-register)
+          level (get-level)]
+      (if (nil? holdr)
+        true
+        ((fn [x] (= (first (rest (rest x))) level)) holdr)))))
 
-;(defmacro to
-;  ([state]
-;   `())
-;  ([state form]
-;   `()))
-;
-;(defmacro jump [state]
-;  `())
-;
-;;;(defmacro verify [form] `())
-;
-;(defmacro getr
-;  ([register]
-;   `())
-;  ([register level])
-;  `())
-;
+(defmacro to [state & forms]
+  `(if ~forms
+     (let [temp '(evaluate-form ~forms)
+           (binding [*config* *config*])
+           (if temp
+             (set-string
+               (cons temp (rest (get-string)))))
+           (set-string (rest (get-string)))
+           '(~state)])
+     `(do (set-string (rest (get-string))) '~state)))
+
+(defmacro jump [state]
+  ` ~state)
+
+;;(defmacro verify [form] `())
+
+;SNePs returns the given feature of the word-form
+;Uses englex::*lexentry* -> lexicon
 ;(defmacro getf
-;  ([feature]
-;   `())
-;  ([feature word]
-;   `()))
-;
-;(defmacro buildq [exp]
-;  `())
-;
-;(defn bldq [exp]
-;  `())
+;  [feature & {:keys [word-form] :or {word-form nil} :and {have-word-form}}]
+;  `(if ~have-word-form
+;     ()))
+
+(defmacro buildq [buildargs]
+  `(let [frags (rest '~buildargs)]
+     (binding [frags frags])
+     bldq (first '~buildargs)))
+
+(defn bldq [exp]
+  `())
 
 
-;;Clojure has a function that yields the unevaluated form (quote(____))
-;;(defmacro quote [value])
+;Clojure has a function that yields the unevaluated form (quote(____))
+;(defmacro quote [value])
 
 ;;tests on the arcs
 (defmacro nullr [register]
   `(= (get-in global-config [:registers (keyword ~register)]) nil))
 
-;(defmacro end-of-sentence []
-;  (binding [global-config]))
+;;Returns true when at the end of a sentence or last punctuation
+(defmacro end-of-sentence []
+  (binding [*config* *config*])
+  (or (= (:string *config*) nil)
+      (and (some (partial = (first (:string *config*)))punctuation)
+           (= (rest (:string *config*)) nil))))
 
 ;;DO LATER/WHEN IT COMES UP
 ;;(defmacro checkf [feature value])
 ;;(defmacro catcheck [word cat])
 ;;(defmacro x-agree [form form])
 ;;(defmacro x-start [])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
